@@ -1,0 +1,15 @@
+node_modules
+.next
+out
+build
+.claude
+
+# Batch-rapporter er lokale kjøre-artefakter. Del en enkelt rapport med:
+#   git add -f data/reports/<id>.json
+data/
+.env
+.env*.local
+.DS_Store
+*.tsbuildinfo
+next-env.d.ts
+.vercel

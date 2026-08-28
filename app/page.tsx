@@ -532,6 +532,7 @@ function Results({ data }: { data: ComparisonResponse }) {
 function coldText(r: Pick<EndpointResult, "cold">): string {
   if (!r.cold) return "–";
   if (r.cold.error) return r.cold.error;
+  if (!r.cold.ok) return `HTTP ${r.cold.httpStatus} (${ms(r.cold.totalMs)})`;
   return ms(r.cold.totalMs);
 }
 

@@ -4,6 +4,24 @@ import { deleteQuery, listQueries, saveQuery } from "@/lib/store";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/** Vercel's serverless filesystem is read-only. Give a clear message instead of a raw errno. */
+function writeError(e: unknown): NextResponse {
+  const err = e as { code?: string; message?: string };
+  if (err?.code === "EROFS" || err?.code === "EACCES") {
+    return NextResponse.json(
+      {
+        error:
+          "Lagring er skrivebeskyttet i denne kjøringen (Vercel). Kjør appen lokalt (npm run dev) for å lagre spørringer, eller legg .rq-filen i queries/ i repoet.",
+      },
+      { status: 501 },
+    );
+  }
+  return NextResponse.json(
+    { error: String(err?.message ?? e) },
+    { status: 400 },
+  );
+}
+
 export async function GET() {
   return NextResponse.json(await listQueries());
 }
@@ -26,10 +44,7 @@ export async function POST(req: Request) {
   try {
     return NextResponse.json(await saveQuery(name, query));
   } catch (e) {
-    return NextResponse.json(
-      { error: String((e as Error).message ?? e) },
-      { status: 400 },
-    );
+    return writeError(e);
   }
 }
 
@@ -42,9 +57,6 @@ export async function DELETE(req: Request) {
     await deleteQuery(name);
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json(
-      { error: String((e as Error).message ?? e) },
-      { status: 400 },
-    );
+    return writeError(e);
   }
 }

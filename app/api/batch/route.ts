@@ -108,6 +108,14 @@ export async function POST(req: Request) {
     endpoints,
     items,
   };
-  await saveReport(report);
-  return NextResponse.json(report);
+  let saved = true;
+  try {
+    await saveReport(report);
+  } catch (e) {
+    // Vercel's filesystem is read-only — return the report anyway, just not persisted.
+    saved = false;
+    const code = (e as { code?: string }).code;
+    if (code !== "EROFS" && code !== "EACCES") throw e;
+  }
+  return NextResponse.json({ ...report, saved });
 }

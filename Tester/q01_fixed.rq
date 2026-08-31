@@ -34,16 +34,18 @@ PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 # at resultatet er identisk (utover ev. CSV-siteringstil).
 #
 
+# COALESCE rundt GROUP_CONCAT/MIN: GraphDB gir "" for tom gruppe, Jena gir
+# ubundet. COALESCE(..., "") gir "" i begge, saa JSON-svaret blir likt.
 SELECT
-  (GROUP_CONCAT(DISTINCT ?poKode;       separator=", ") AS ?progOmr)
-  (GROUP_CONCAT(DISTINCT ?lpKortform;   separator=", ") AS ?laereplan)
+  (COALESCE(GROUP_CONCAT(DISTINCT ?poKode;       separator=", "), "") AS ?progOmr)
+  (COALESCE(GROUP_CONCAT(DISTINCT ?lpKortform;   separator=", "), "") AS ?laereplan)
   ?fag ?fagkode ?fagkodeTittel ?udirNoLenke
-  (GROUP_CONCAT(DISTINCT ?forAa;        separator=", ") AS ?forAarstrinn)
-  (MIN(?uFSemRaw) AS ?uFSem)
-  (MIN(?uSSemRaw) AS ?uSSem)
-  (MIN(?xFSemRaw) AS ?xFSem)
-  (MIN(?xSSemRaw) AS ?xSSem)
-  (GROUP_CONCAT(DISTINCT ?benSammenMed; separator=", ") AS ?benyttesSammenMed)
+  (COALESCE(GROUP_CONCAT(DISTINCT ?forAa;        separator=", "), "") AS ?forAarstrinn)
+  (COALESCE(MIN(?uFSemRaw), "") AS ?uFSem)
+  (COALESCE(MIN(?uSSemRaw), "") AS ?uSSem)
+  (COALESCE(MIN(?xFSemRaw), "") AS ?xFSem)
+  (COALESCE(MIN(?xSSemRaw), "") AS ?xSSem)
+  (COALESCE(GROUP_CONCAT(DISTINCT ?benSammenMed; separator=", "), "") AS ?benyttesSammenMed)
 WHERE {
   {
     SELECT

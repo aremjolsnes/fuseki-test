@@ -182,6 +182,10 @@ export default function Page() {
       });
       const data = await res.json();
       if (!res.ok) setError(data?.error ?? `HTTP ${res.status}`);
+      else if (data.saved === false)
+        setNotice(
+          `Batch kjørt (${data.items.length} spørringer), men rapporten kunne ikke lagres her (skrivebeskyttet filsystem på Vercel). Kjør lokalt for å se den under /report.`,
+        );
       else router.push(`/report/${data.id}`);
     } catch (e) {
       setError(String((e as Error).message ?? e));

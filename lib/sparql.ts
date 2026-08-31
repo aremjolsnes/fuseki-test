@@ -40,9 +40,26 @@ function canonTerm(t: Term): string {
   return JSON.stringify([type, t.value ?? "", lang, datatype]);
 }
 
+/**
+ * A bound-but-empty plain-string literal. GraphDB emits `""` for an empty
+ * GROUP_CONCAT / SAMPLE; Jena/Fuseki leaves the variable unbound. Treat the
+ * two as equivalent so that difference doesn't flood the diff.
+ */
+function isEmptyLiteral(t: Term): boolean {
+  const type = t.type === "typed-literal" ? "literal" : t.type ?? "";
+  return (
+    type === "literal" &&
+    !t["xml:lang"] &&
+    (!t.datatype || t.datatype === XSD_STRING) &&
+    (t.value ?? "") === ""
+  );
+}
+
 /** Canonical, order-independent key for one result row. */
 function canonBinding(b: Binding): string {
-  const keys = Object.keys(b).sort();
+  const keys = Object.keys(b)
+    .filter((k) => !isEmptyLiteral(b[k]))
+    .sort();
   return JSON.stringify(keys.map((k) => [k, canonTerm(b[k])]));
 }
 
@@ -76,8 +93,8 @@ function fieldDiffs(
     for (const k of new Set([...Object.keys(p), ...(t ? Object.keys(t) : [])])) {
       const pt = p[k] ?? null;
       const tt = t?.[k] ?? null;
-      const pc = pt ? canonTerm(pt) : null;
-      const tc = tt ? canonTerm(tt) : null;
+      const pc = pt && !isEmptyLiteral(pt) ? canonTerm(pt) : null;
+      const tc = tt && !isEmptyLiteral(tt) ? canonTerm(tt) : null;
       if (pc !== tc) fields.push({ key: k, prod: pt, test: tt });
     }
     if (fields.length) samples.push({ fields });

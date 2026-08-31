@@ -4,17 +4,19 @@ import { deleteQuery, listQueries, saveQuery } from "@/lib/store";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Vercel's serverless filesystem is read-only. Give a clear message instead of a raw errno. */
 function writeError(e: unknown): NextResponse {
   const err = e as { code?: string; message?: string };
   if (err?.code === "EROFS" || err?.code === "EACCES") {
     return NextResponse.json(
       {
         error:
-          "Lagring er skrivebeskyttet i denne kjøringen (Vercel). Kjør appen lokalt (npm run dev) for å lagre spørringer, eller legg .rq-filen i queries/ i repoet.",
+          "Lagring feilet: filsystemet er skrivebeskyttet. På Vercel må en Blob-store være koblet til (env-var BLOB_READ_WRITE_TOKEN); lokalt kjør npm run dev.",
       },
       { status: 501 },
     );
+  }
+  if (err?.code === "EBUILTIN") {
+    return NextResponse.json({ error: err.message }, { status: 409 });
   }
   return NextResponse.json(
     { error: String(err?.message ?? e) },

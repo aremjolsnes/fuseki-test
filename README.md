@@ -26,14 +26,33 @@ i verktøyet – du lagrer og limer inn ren SPARQL.
 i editoren eller via UI-et (**Lagre som** / **Slett**). De er med i git, så et
 delt sett følger repoet.
 
+Lagringen har to backends (`lib/store.ts`):
+
+- **Lokalt** (`npm run dev`): skriver/leser `queries/*.rq` direkte.
+- **Vercel**: filsystemet er skrivebeskyttet, så lagring krever en **Blob-store**
+  (env-var `BLOB_READ_WRITE_TOKEN`). Da lagres nye spørringer i Blob under
+  `queries/<navn>.rq`, og `listQueries()` slår sammen de committede `.rq`-filene
+  (skrivebeskyttet basis) med de Blob-lagrede (som overstyrer ved navnekollisjon).
+  Innebygde (committede) spørringer kan ikke slettes via UI-et.
+
+Uten Blob-token på Vercel gir «Lagre» en tydelig feilmelding i stedet for å krasje.
+
+### Sette opp Blob
+
+1. Vercel-prosjekt → **Storage** → **Create** → **Blob**. Koble den til prosjektet
+   – da injiseres `BLOB_READ_WRITE_TOKEN` i alle miljøer automatisk.
+2. Redeploy. `@vercel/blob` er allerede en avhengighet.
+3. Lokalt (valgfritt): legg `BLOB_READ_WRITE_TOKEN=…` i `.env.local` for å teste
+   Blob-stien; ellers brukes lokale filer.
+
 ## Batch og rapporter
 
-**Kjør alle lagrede** kjører hver `.rq` mot begge endepunkter og lagrer en
-rapport under `data/reports/<id>.json`. Rapportene vises på `/report` –
-median-tider, `test/dagens`-forhold, kaldstart og diff-status per spørring.
-`data/` er git-ignorert; del én rapport med `git add -f data/reports/<id>.json`.
-På Vercel er filsystemet efemert – batch-rapporter overlever ikke der; kjør
-batch lokalt.
+**Kjør alle lagrede** kjører hver spørring mot begge endepunkter og lagrer en
+rapport (`data/reports/<id>.json` lokalt, eller Blob under `reports/<id>.json` på
+Vercel). Rapportene vises på `/report` – median-tider, `test/dagens`-forhold,
+kaldstart og diff-status per spørring. `data/` er git-ignorert; del én lokal
+rapport med `git add -f data/reports/<id>.json`. Uten Blob på Vercel kjøres
+batchen fortsatt, men rapporten lagres ikke (UI-et sier fra).
 
 ## Last-modus
 
@@ -63,6 +82,9 @@ offentlig. Merk at `/api/run` har `maxDuration = 60` – en kald Fuseki-start
 kan sprenge dette på Vercel. Kjør da en runde med lav `iterations` først for
 å varme opp, eller kjør verktøyet lokalt.
 
+For å lagre spørringer og batch-rapporter på Vercel: koble til en Blob-store
+(se «Sette opp Blob» over).
+
 ## Konfigurasjon
 
 Endepunktene løses i denne rekkefølgen (se `lib/endpoints.ts`):
@@ -84,6 +106,6 @@ Endepunktene løses i denne rekkefølgen (se `lib/endpoints.ts`):
 | `app/api/config/route.ts` | Eksponerer de løste endepunkt-URL-ene til UI-et |
 | `lib/benchmark.ts` | Tidtaking, warmup, interleaved/pool-iterasjoner, aggregering |
 | `lib/sparql.ts` | Parsing og semantisk diff av SPARQL JSON-resultater |
-| `lib/store.ts` | Lesing/skriving av `queries/*.rq` og `data/reports/*.json` |
+| `lib/store.ts` | Lagrede spørringer og rapporter – lokale filer eller Vercel Blob |
 | `lib/endpoints.ts` | Løser de to endepunkt-URL-ene |
 | `lib/types.ts` | Delte typer |

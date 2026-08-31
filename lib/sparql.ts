@@ -19,13 +19,17 @@ export function rowCount(r: SparqlResults | null): number | null {
   return r.results?.bindings?.length ?? null;
 }
 
+const XSD_STRING = "http://www.w3.org/2001/XMLSchema#string";
+
 function canonTerm(t: Term): string {
-  return JSON.stringify([
-    t.type ?? "",
-    t.value ?? "",
-    t["xml:lang"] ?? "",
-    t.datatype ?? "",
-  ]);
+  // Legacy Sesame/GraphDB JSON uses "typed-literal"; RDF 1.1 uses "literal".
+  const type = t.type === "typed-literal" ? "literal" : t.type ?? "";
+  const lang = t["xml:lang"] ?? "";
+  let datatype = t.datatype ?? "";
+  // RDF 1.1: a plain string literal and an xsd:string literal are the same term.
+  // GraphDB omits the datatype, Jena/Fuseki emits xsd:string — normalise both.
+  if (type === "literal" && lang === "" && datatype === XSD_STRING) datatype = "";
+  return JSON.stringify([type, t.value ?? "", lang, datatype]);
 }
 
 /** Canonical, order-independent key for one result row. */

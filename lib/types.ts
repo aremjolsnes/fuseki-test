@@ -63,6 +63,17 @@ export interface DiffRow {
   count: number;
 }
 
+export interface MismatchField {
+  key: string;
+  prod: Term | null;
+  test: Term | null;
+}
+
+/** One differing row, paired across the two endpoints, with only the fields that diverge. */
+export interface MismatchSample {
+  fields: MismatchField[];
+}
+
 export interface DiffResult {
   comparable: boolean;
   reason?: string;
@@ -83,6 +94,7 @@ export interface DiffResult {
     onlyInProd: DiffRow[];
     onlyInTest: DiffRow[];
     truncated: boolean;
+    mismatchSamples: MismatchSample[];
   };
 }
 

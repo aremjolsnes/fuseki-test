@@ -9,6 +9,7 @@ import type {
   EndpointResult,
   NumStats,
   SavedQuery,
+  Term,
 } from "@/lib/types";
 
 const SAMPLE_QUERY = `PREFIX u: <http://psi.udir.no/ontologi/kl06/>
@@ -35,6 +36,17 @@ function bindingText(row: DiffRow): string {
   const parts = Object.entries(row.binding).map(([k, t]) => `${k}=${t.value}`);
   const suffix = row.count > 1 ? ` ×${row.count}` : "";
   return `{ ${parts.join(", ")} }${suffix}`;
+}
+
+function fmtTerm(t: Term | null): string {
+  if (!t) return "(mangler)";
+  let s = JSON.stringify(t.value ?? "");
+  if (t["xml:lang"]) s += `@${t["xml:lang"]}`;
+  if (t.datatype)
+    s += ` ^^${t.datatype.replace("http://www.w3.org/2001/XMLSchema#", "xsd:")}`;
+  if (t.type && t.type !== "literal" && t.type !== "uri") s += ` [${t.type}]`;
+  else if (t.type === "uri") s += " [uri]";
+  return s;
 }
 
 export default function Page() {
@@ -503,6 +515,44 @@ function Results({ data }: { data: ComparisonResponse }) {
               )}
             </tbody>
           </table>
+
+          {diff.rows.mismatchSamples.length > 0 && (
+            <>
+              <h2>Feltavvik</h2>
+              <p className="sub" style={{ margin: "0 0 0.5rem" }}>
+                Avvikende rader paret på tvers av endepunktene; bare feltene som
+                faktisk er ulike vises.
+              </p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Felt</th>
+                    <th>Dagens (GraphDB)</th>
+                    <th>Test (Fuseki)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {diff.rows.mismatchSamples.flatMap((s, si) =>
+                    s.fields.map((f, fi) => (
+                      <tr key={`${si}-${fi}`}>
+                        <td className="num">{fi === 0 ? si + 1 : ""}</td>
+                        <td>
+                          <code>{f.key}</code>
+                        </td>
+                        <td>
+                          <code>{fmtTerm(f.prod)}</code>
+                        </td>
+                        <td>
+                          <code>{fmtTerm(f.test)}</code>
+                        </td>
+                      </tr>
+                    )),
+                  )}
+                </tbody>
+              </table>
+            </>
+          )}
         </>
       )}
 

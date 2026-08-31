@@ -1,4 +1,12 @@
-import type { Binding, DiffResult, DiffRow, SparqlResults, Term } from "./types";
+import type {
+  Binding,
+  DiffResult,
+  DiffRow,
+  MismatchField,
+  MismatchSample,
+  SparqlResults,
+  Term,
+} from "./types";
 
 /** Max number of differing rows reported per side, to keep the payload small. */
 const MAX_DIFF_ROWS = 50;
@@ -36,6 +44,45 @@ function canonTerm(t: Term): string {
 function canonBinding(b: Binding): string {
   const keys = Object.keys(b).sort();
   return JSON.stringify(keys.map((k) => [k, canonTerm(b[k])]));
+}
+
+/** Pair up rows that differ and report which fields actually diverge. */
+function fieldDiffs(
+  onlyProd: DiffRow[],
+  onlyTest: DiffRow[],
+  limit: number,
+): MismatchSample[] {
+  const testPool = onlyTest.map((r) => r.binding);
+  const used = new Set<number>();
+  const samples: MismatchSample[] = [];
+
+  for (const { binding: p } of onlyProd.slice(0, limit)) {
+    // best test row = most fields with an equal .value string
+    let bestIdx = -1;
+    let bestScore = -1;
+    testPool.forEach((t, i) => {
+      if (used.has(i)) return;
+      let score = 0;
+      for (const k of Object.keys(p)) if (t[k]?.value === p[k]?.value) score++;
+      if (score > bestScore) {
+        bestScore = score;
+        bestIdx = i;
+      }
+    });
+    const t = bestIdx >= 0 ? testPool[bestIdx] : null;
+    if (bestIdx >= 0) used.add(bestIdx);
+
+    const fields: MismatchField[] = [];
+    for (const k of new Set([...Object.keys(p), ...(t ? Object.keys(t) : [])])) {
+      const pt = p[k] ?? null;
+      const tt = t?.[k] ?? null;
+      const pc = pt ? canonTerm(pt) : null;
+      const tc = tt ? canonTerm(tt) : null;
+      if (pc !== tc) fields.push({ key: k, prod: pt, test: tt });
+    }
+    if (fields.length) samples.push({ fields });
+  }
+  return samples;
 }
 
 function multiset(bindings: Binding[]): Map<string, number> {
@@ -168,6 +215,7 @@ export function diffResults(
       onlyInProd,
       onlyInTest,
       truncated,
+      mismatchSamples: fieldDiffs(onlyInProd, onlyInTest, 8),
     },
   };
 }

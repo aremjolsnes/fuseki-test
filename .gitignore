@@ -4,6 +4,10 @@ out
 build
 .claude
 
+# Generert testutdata. Behold en enkelt fil med: git add -f Tester/<fil>.csv
+Tester/*.csv
+/q01_Gdb.json
+
 # Batch-rapporter er lokale kjøre-artefakter. Del en enkelt rapport med:
 #   git add -f data/reports/<id>.json
 data/

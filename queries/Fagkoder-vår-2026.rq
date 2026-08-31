@@ -1,0 +1,131 @@
+PREFIX u:  <http://psi.udir.no/ontologi/kl06/>
+PREFIX st: <https://data.udir.no/kl06/v201906/status/status_>
+PREFIX d:  <http://psi.udir.no/kl06/>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT DISTINCT
+  (CONCAT(GROUP_CONCAT(DISTINCT ?poKode;       separator=", ")) AS ?progOmr)
+  (CONCAT(GROUP_CONCAT(DISTINCT ?lpKortform;   separator=", ")) AS ?laereplan)
+  ?fag 
+  ?fagkode ?fagkodeTittel ?udirNoLenke
+  (CONCAT(GROUP_CONCAT(DISTINCT ?forAa;        separator=", ")) AS ?forAarstrinn)
+  ?uFSem ?uSSem ?xFSem ?xSSem
+  (CONCAT(GROUP_CONCAT(DISTINCT ?benSammenMed; separator=", ")) AS ?benyttesSammenMed)
+WHERE {
+
+  # --- Velg filtersemester her (eksempel: Høst 2025) ---
+  VALUES (?filterSesong ?filterAar) { ("vaar" 2026) }
+  BIND(IF(LCASE(?filterSesong) IN ("vaar","vår"), 1, 2) AS ?filIdx)
+  BIND((xsd:integer(?filterAar)*2) + ?filIdx AS ?filOrd)
+
+  # ===== Gren 1: ordinære fagkoder =====
+  {
+    ?fk a u:fagkode ;
+        u:kode ?fagkode ;
+        u:tittel ?fagkodeTittel ;
+        u:opplaeringsnivaa d:opplaeringsnivaa_videregaaende ;
+        u:status st:publisert ;
+        u:opplaeringsfag/u:programomraader-referanse ?po ;
+        u:opplaeringsfag/u:tittel ?fag ;
+        u:opplaeringsfag/u:for-aarstrinn/u:kode ?forAa .
+
+        FILTER(LANG(?fagkodeTittel) = "default")
+        
+        OPTIONAL { ?fk u:opplaeringsfag/u:laereplan-referanse ?lp .
+        ?lp u:status st:publisert ;
+        u:kortform ?lpKortform .
+        FILTER  (LANG(?lpKortform) = "default")
+        }
+
+    OPTIONAL {?fk u:naar-gis-det-undervisning-foerste-semester/u:tittel ?uFSem .
+        FILTER(LANG(?uFSem) = "default")}
+
+    OPTIONAL { 
+      ?fk u:naar-gis-det-undervisning-siste-semester/u:tittel ?uSSem .
+      FILTER(LANG(?uSSem) = "default")
+    }
+        
+    OPTIONAL { ?fk u:naar-kan-man-ta-eksamen-foerste-semester/u:tittel ?xFSem .
+        FILTER(LANG(?xFSem) = "default")}
+    OPTIONAL { ?fk u:naar-kan-man-ta-eksamen-siste-semester/u:tittel ?xSSem .
+        FILTER(LANG(?xSSem) = "default")}
+
+    BIND( IRI(CONCAT("https://www.udir.no/lk20/fagkoder/", STR(?fagkode))) AS ?udirNoLenke )
+
+    
+    ?po u:kode ?poKode .
+
+    OPTIONAL { ?fk u:benyttes-sammen-med/u:kode ?benSammenMed . }
+
+    # --- Ordningsnøkkel fra tittel-literal ("Vår/Høst YYYY") ---
+    
+    OPTIONAL {
+    BIND(LCASE(STR(?uFSem)) AS ?uF_str)
+    BIND(xsd:integer(REPLACE(?uF_str, "^.*([0-9]{4}).*$", "$1")) AS ?uF_year)
+    BIND(IF(REGEX(?uF_str, "(^|\\W)(vår|vaar)(\\W|$)"), 1, 2) AS ?uF_idx)
+    BIND((?uF_year*2) + ?uF_idx AS ?uF_ord)
+        }
+
+    OPTIONAL {
+      BIND(LCASE(STR(?uSSem)) AS ?uS_str)
+      BIND(xsd:integer(REPLACE(?uS_str, "^.*([0-9]{4}).*$", "$1")) AS ?uS_year)
+      BIND(IF(REGEX(?uS_str, "(^|\\W)(vår|vaar)(\\W|$)"), 1, 2) AS ?uS_idx)
+      BIND((?uS_year*2) + ?uS_idx AS ?uS_ord)
+    
+
+    FILTER( ?uF_ord <= ?filOrd && ( !BOUND(?uS_ord) || ?uS_ord >= ?filOrd ) )
+            }
+
+    FILTER (LANG(?fag) = "default" )
+  }
+
+  UNION
+
+  # ===== Gren 2: IOP-koder =====
+  {
+    VALUES ?fagkode { "IOP1000" "IOP2000" "IOP3000" "IOP4000" "IOP5000" }
+
+    ?fk a u:fagkode ;
+        u:kode ?fagkode ;
+        u:tittel ?fagkodeTittel ;
+        u:opplaeringsnivaa d:opplaeringsnivaa_videregaaende ;
+        u:status st:publisert ;
+        u:naar-gis-det-undervisning-foerste-semester/u:tittel ?uFSem .
+
+    FILTER(LANG(?uFSem) = "default")
+    FILTER(LANG(?fagkodeTittel) = "default")
+
+    OPTIONAL { 
+      ?fk u:naar-gis-det-undervisning-siste-semester/u:tittel ?uSSem .
+      FILTER(LANG(?uSSem) = "default")
+    }
+
+    # Syntetiske visningsfelt
+    BIND ("IOP" AS ?poKode)
+    BIND (STRLANG("IOP", "default") AS ?lpKortform)
+    BIND (SUBSTR(?fagkode, 4, 1) AS ?_aar)
+    BIND (STRLANG(CONCAT("IOP ", ?_aar, ". år"), "default") AS ?fag)
+
+    BIND( IRI(CONCAT("https://www.udir.no/lk20/fagkoder/", STR(?fagkode))) AS ?udirNoLenke )
+
+    VALUES ?forAa { "vg1" "vg2" "vg3" }
+
+    # Samme ordningsnøkkel/filter
+    BIND(LCASE(STR(?uFSem)) AS ?uF_str)
+    BIND(xsd:integer(REPLACE(?uF_str, "^.*([0-9]{4}).*$", "$1")) AS ?uF_year)
+    BIND(IF(REGEX(?uF_str, "(^|\\W)(vår|vaar)(\\W|$)"), 1, 2) AS ?uF_idx)
+    BIND((?uF_year*2) + ?uF_idx AS ?uF_ord)
+
+    OPTIONAL {
+      BIND(LCASE(STR(?uSSem)) AS ?uS_str)
+      BIND(xsd:integer(REPLACE(?uS_str, "^.*([0-9]{4}).*$", "$1")) AS ?uS_year)
+      BIND(IF(REGEX(?uS_str, "(^|\\W)(vår|vaar)(\\W|$)"), 1, 2) AS ?uS_idx)
+      BIND((?uS_year*2) + ?uS_idx AS ?uS_ord)
+    }
+
+    FILTER( ?uF_ord <= ?filOrd && ( !BOUND(?uS_ord) || ?uS_ord >= ?filOrd ) )
+  }
+
+}
+GROUP BY ?fag ?fagkode ?fagkodeTittel ?udirNoLenke ?uFSem ?uSSem ?xFSem ?xSSem
+ORDER BY LCASE(STR(?fag)) ?fagkode

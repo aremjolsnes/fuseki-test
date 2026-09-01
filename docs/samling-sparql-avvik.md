@@ -4,14 +4,22 @@
 **Endepunkter:** prod GraphDB `sparql-data.udir.no/repositories/201906` vs. test Fuseki `ca-sparql-dev…azurecontainerapps.io/201906/query`
 **Kjørt:** 2026-09-01, alle spørringer som POST med `application/x-www-form-urlencoded`, `Accept: application/sparql-results+json`.
 
-De 14 spørringene med avvik faller i **fire årsaker**. Tre av dem er
+> **Oppdatering 2026-09-01 (wiki-revisjon `e0ebe89`):** All bruk av `rdf:` i
+> samlingen er nå forsynt med `PREFIX rdf:`. Re-verifisert:
+> **xb10g46s** og **xb11g04K** gir nå HTTP 200 fra Fuseki, og xb11g04K gir
+> **332 rader helt likt** GraphDB. Årsak ③ er dermed lukket. Gjenstår:
+> **xb10g54U** (fortsatt HTTP 400 — det er *ikke* et prefiks-problem, se ②) og
+> ①-spørringene (konfigurasjon: ontologien i Fuseki-datasettet). xb10g46s er nå
+> en ren dublett av xb10g44T og deler samme ①-avvik.
+
+De 14 spørringene med avvik faller i **fire årsaker**. Tre av dem er (var)
 spørrings­feil som GraphDB tolererer stille og Jena avviser (eller svarer
 annerledes på) — ikke feil i Fuseki. Den fjerde er kosmetisk.
 
-| Ref | Spørring | Årsak | Fuseki-svar | Vurdering |
+| Ref | Spørring | Årsak | Fuseki-svar | Status |
 | --- | --- | --- | --- | --- |
 | xb10g44T | List RDF-typer (m/ prefiks) | ① ontologi mangler i Fuseki | 44 rader (GraphDB 51) | Fuseki gir det «rene» svaret; se fix |
-| xb10g46s | – samme, uten `PREFIX rdf:` | ③ udeklarert prefiks | **HTTP 400**, ingen JSON | Legg til `PREFIX rdf:` |
+| xb10g46s | – samme (nå m/ `PREFIX rdf:`) | ③→① prefiks lagt til; nå ontologi-diff | 44 rader (GraphDB 51) | HTTP 400 løst; identisk med xb10g44T |
 | xb10g46D | – samme, med `a` | ① ontologi mangler i Fuseki | 44 rader (GraphDB 51) | som xb10g44T |
 | xb10g47z | List alle properties | ① ontologi mangler i Fuseki | 155 (GraphDB 161) | 6 skjema-predikater faller bort |
 | xb10g48C | Antall tripler | ① ontologi mangler i Fuseki | 1 209 749 (GraphDB 1 235 817) | Δ = 26 068 ≈ ontologien |
@@ -22,19 +30,21 @@ annerledes på) — ikke feil i Fuseki. Den fjerde er kosmetisk.
 | xb10g50b | Distinkte objektnoder | ① ontologi mangler i Fuseki | 135 053 (GraphDB 148 060) | +13 007 ontologi-URI-er |
 | xb10g53Y | Likelydende kompetansemål (LK20) | ④ `GROUP_CONCAT`-rekkefølge | 2894 rader, **like** verdier | Ingen reell forskjell |
 | xb10g54n | Likelydende LK06 vs. LK20 | ④ `GROUP_CONCAT`-rekkefølge | 109 rader, **like** verdier | Ingen reell forskjell |
-| xb10g54U | Kompetansemål (LK20), tving `@sme`→`@nob` | ② `?spraak` bundet to ganger | **HTTP 400**, ingen JSON | Døp om BIND-variabelen |
-| xb11g04K | Diff kompetansemål LK06-plan vs. LK20-plan | ③ udeklarert `rdf:type` | **HTTP 400**, ingen JSON | Bytt `rdf:type` → `a` |
+| xb10g54U | Kompetansemål (LK20), tving `@sme`→`@nob` | ② `?spraak` bundet to ganger | **HTTP 400**, ingen JSON | Utestående — døp om BIND-variabelen |
+| xb11g04K | Diff kompetansemål LK06-plan vs. LK20-plan | ③ udeklarert `rdf:type` | 332 rader, **helt likt** | ✅ Løst i wiki (`PREFIX rdf:` lagt til) |
 
-Etter at feilene under ② og ③ er rettet, gir Fuseki **identisk resultat** som
-GraphDB (verifisert: xb11g04K 332 rader likt, xb10g54U 1000 rader likt når
-`GROUP_CONCAT`-rekkefølgen normaliseres).
+Status nå: **årsak ③ er lukket** i wikien. Fuseki gir **identisk resultat** som
+GraphDB for xb11g04K (332 rader). Utestående er **xb10g54U** (årsak ②) og
+**①**-spørringene (konfigurasjon) — xb10g44T, xb10g46s (≡ xb10g44T), xb10g46D,
+xb10g47z, xb10g48C, xb10g48Q, xb10g49&, xb10g49w, xb10g49G, xb10g50b.
 
 ---
 
 ## ① Grep-ontologien (TBox) ligger i GraphDB-repoet, men ikke i Fuseki-datasettet
 
-Dette forklarer **ni** av spørringene. Alle er «utforskende»/statistikk­spørringer
-som teller eller lister *alt* i grafen uten å avgrense til Grep-innhold.
+Dette forklarer **ni distinkte spørringer** (xb10g46s teller som en tiende, men er
+etter prefiks-fiksen identisk med xb10g44T). Alle er «utforskende»/statistikk­
+spørringer som teller eller lister *alt* i grafen uten å avgrense til Grep-innhold.
 
 ### Bevis
 
@@ -77,7 +87,7 @@ på begge.
 ### Hva bør gjøres
 
 **Anbefalt:** last Grep-ontologien inn i Fuseki-datasettet også, slik at
-endepunktene er innholdsmessig like. Da forsvinner alle ni avvikene av seg selv,
+endepunktene er innholdsmessig like. Da forsvinner alle ①-avvikene av seg selv,
 og spørringene i wikien trenger ingen endring.
 
 Hvis ontologien **bevisst** skal holdes utenfor Fuseki, så er Fuseki-tallene de
@@ -161,7 +171,7 @@ To endringer: `?spraak` → `?visSpraak` i `BIND` + de tre `FILTER`-linjene, og
 
 ---
 
-## ③ Udeklarert `rdf:`-prefiks — Fuseki gir HTTP 400
+## ③ Udeklarert `rdf:`-prefiks — Fuseki ga HTTP 400 ✅ RETTET I WIKI
 
 ```
 Parse error: Unresolved prefixed name: rdf:type
@@ -171,33 +181,28 @@ GraphDB har et sett **innebygde, ikke-standard prefiks-snarveier** (`rdf`, `rdfs
 `owl`, `xsd`, `sesame`, …) som gjelder uten `PREFIX`-linje. Jena følger
 spesifikasjonen: alle prefikser unntatt `bnode:`-liknende må deklareres.
 
-### xb10g46s
+Begge de rammede spørringene (**xb10g46s**, **xb11g04K**) har nå fått
+`PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>` i wikien
+(revisjon `e0ebe89`), og begge gir HTTP 200 fra Fuseki.
 
-Spørringen er identisk med xb10g44T bortsett fra at `PREFIX rdf:` er utelatt.
-Legg den tilbake:
+### xb11g04K — fullt løst
 
-```sparql
-PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-SELECT DISTINCT ?type WHERE { [] rdf:type ?type }
-```
+Første `UNION`-gren brukte `rdf:type` med bare `u:` og `d:` deklarert. Med
+`PREFIX rdf:` på plass gir begge motorer nå **332 rader, helt likt**
+(re-verifisert 2026-09-01). Ingen videre tiltak.
 
-(Da blir xb10g46s funksjonelt en dublett av xb10g44T. Hvis poenget i wikien er å
-*vise* GraphDB-snarveien, bør det stå eksplisitt at det er en ikke-standard
-GraphDB-utvidelse som ikke virker andre steder.)
+> Alternativ som også hadde virket: bytte `rdf:type` → nøkkelordet `a` (slik
+> søsterspørringen xb11g04u gjør). `PREFIX rdf:` er like greit.
 
-### xb11g04K
+### xb10g46s — HTTP 400 løst, men avviker fortsatt (nå årsak ①)
 
-Første `UNION`-gren bruker `rdf:type`, men bare `u:` og `d:` er deklarert.
-Enkleste fiks er å bruke nøkkelordet `a` (slik søsterspørringen xb11g04u
-allerede gjør):
+Med `PREFIX rdf:` lagt til er spørringen funksjonelt en **dublett av xb10g44T**
+og gir samme svar som den: 44 rader mot Fuseki, 51 mot GraphDB — differansen er
+nå utelukkende ontologien (se ①), ikke prefikset.
 
-```sparql
-#   ?kompetansemaal rdf:type u:kompetansemaal ;
-    ?kompetansemaal a        u:kompetansemaal ;
-```
-
-Verifisert: etter denne endringen gir begge motorer **332 rader, helt likt**.
-(Alternativt: legg til `PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>`.)
+> Hvis poenget i wikien er å *vise* GraphDB sin innebygde prefiks-snarvei, bør
+> det stå eksplisitt at det er en ikke-standard GraphDB-utvidelse som ikke virker
+> på andre SPARQL-motorer — ellers er xb10g46s bare støy ved siden av xb10g44T.
 
 ---
 
@@ -260,9 +265,13 @@ spørringen fra fil.
 
 ## Oppsummert
 
-| Årsak | Spørringer | Er det en Fuseki-feil? | Tiltak |
-| --- | --- | --- | --- |
-| ① Ontologien mangler i Fuseki-datasettet | xb10g44T, xb10g46D, xb10g47z, xb10g48C, xb10g48Q, xb10g49&, xb10g49w, xb10g49G, xb10g50b | Nei — konfigurasjon | Last ontologien inn i Fuseki (anbefalt), ev. oppdater forventede tall + avgrens spørringene |
-| ② `?spraak` bundet to ganger | xb10g54U | Nei — spørringsfeil GraphDB slapp forbi | Døp om BIND-variabel |
-| ③ Udeklarert `rdf:`-prefiks | xb10g46s, xb11g04K | Nei — spørringsfeil GraphDB slapp forbi | Legg til `PREFIX rdf:` / bruk `a` |
-| ④ `GROUP_CONCAT`-rekkefølge | xb10g53Y, xb10g54n | Nei — udefinert i SPARQL 1.1 | Ingen (ev. indre `ORDER BY`) |
+| Årsak | Spørringer | Er det en Fuseki-feil? | Tiltak | Status 2026-09-01 |
+| --- | --- | --- | --- | --- |
+| ① Ontologien mangler i Fuseki-datasettet | xb10g44T, xb10g46s, xb10g46D, xb10g47z, xb10g48C, xb10g48Q, xb10g49&, xb10g49w, xb10g49G, xb10g50b | Nei — konfigurasjon | Last ontologien inn i Fuseki (anbefalt), ev. oppdater forventede tall + avgrens spørringene | Utestående |
+| ② `?spraak` bundet to ganger | xb10g54U | Nei — spørringsfeil GraphDB slapp forbi | Døp om BIND-variabel | **Utestående** (HTTP 400) |
+| ③ Udeklarert `rdf:`-prefiks | xb10g46s, xb11g04K | Nei — spørringsfeil GraphDB slapp forbi | Legg til `PREFIX rdf:` / bruk `a` | ✅ Rettet i wiki; xb11g04K nå identisk, xb10g46s går over i ① |
+| ④ `GROUP_CONCAT`-rekkefølge | xb10g53Y, xb10g54n | Nei — udefinert i SPARQL 1.1 | Ingen (ev. indre `ORDER BY`) | Ingen reell forskjell |
+
+**Neste steg:** (1) rett `?spraak`-kollisjonen i xb10g54U, (2) avklar om
+Grep-ontologien skal lastes inn i Fuseki-datasettet — det lukker de ti
+①-spørringene uten videre endringer i wikien.

@@ -305,3 +305,131 @@ spørringen fra fil.
 asserterte dataen (Fuseki-tallene), eller slå på RDFS-resonnering i Fuseki for
 full paritet. Ingen av delene haster: assertert data er allerede identisk, og
 ingen innholdsspørring påvirkes.
+
+---
+
+# Høring: skal RDFS-resonneringen fra GraphDB gjenskapes i Fuseki?
+
+*Til konsumenter av Udirs SPARQL-tjeneste. Frist for innspill: `[dato]`.
+Innspill til `[kontakt]`.*
+
+## Kort bakgrunn
+
+Dagens tjeneste kjører på **GraphDB**, som er satt opp med en **regelmotor for
+RDFS-resonnering** slått på. Den nye tjenesten kjører på **Jena Fuseki**, som
+leveres **uten regelmotor** («ut av boksen»). Den *lagrede* dataen er den samme i
+begge (verifisert: nøyaktig 1 209 749 tripler hver — GraphDB sine egne
+«kun eksplisitt»-tall er identiske med Fuseki). Forskjellen er utelukkende at
+GraphDB i tillegg **regner ut og svarer med** et sett avledede tripler som Fuseki
+ikke lager.
+
+## Hva GraphDB gjør i dag som Fuseki ikke gjør
+
+Regelmotoren legger til, som svar på spørringer:
+
+- `?p rdf:type rdf:Property` for **hvert** predikat i datasettet (~13 000).
+- `?p rdfs:subPropertyOf ?p` (refleksivt) for hvert predikat (~13 000).
+- `?k rdf:type rdfs:Class` for hver klasse, og `?k rdfs:subClassOf ?k` refleksivt.
+- RDFS/OWL-vokabularets egne aksiomer, f.eks.
+  `rdf:Alt rdfs:subClassOf rdfs:Container`, `rdf:XMLLiteral rdfs:subClassOf
+  rdfs:Literal`, `rdf:type rdf:type rdf:Property`.
+- Noen få tripler fra GraphDB sitt innebygde PROTON-systemskjema
+  (`proton:transitiveOver` m.m.).
+
+Til sammen ~26 000 avledede tripler.
+
+**Viktig:** Grep-modellen har i dag **ingen** asserterte klasse- eller
+egenskapshierarkier (ingen `rdfs:domain`, `rdfs:range`, `rdfs:subClassOf` eller
+`rdfs:subPropertyOf` mellom Grep-termer, ingen `owl:inverseOf` /
+`owl:TransitiveProperty`). Regelmotoren har derfor **ingenting innholdsmessig** å
+utlede. Alt den produserer er skjema-teknisk «kjeletekst». Et oppslag som
+`d:NOR01-06 rdf:type ?t` gir nøyaktig samme svar på begge motorer.
+
+## Konsekvenser med Fuseki slik den er nå (regelmotor av)
+
+**For innholdsspørringer: ingen.** Spørringer som binder mot konkrete predikater
+og klasser (`?s a u:kompetansemaal_lk20`, `?x u:tilhoerer-laereplan ?lp`, osv.)
+gir identisk resultat. Dette er den store majoriteten av all bruk.
+
+**For skjema-introspeksjon og statistikk: disse svarene endrer seg** (Fuseki gir
+den asserterte dataen, GraphDB ga assertert + avledet):
+
+| Spørring | GraphDB i dag | Fuseki |
+| --- | --- | --- |
+| Antall tripler | 1 235 817 | 1 209 749 |
+| Antall distinkte RDF-typer (`[] a ?o`) | 51 | 44 |
+| Antall distinkte predikater | 13 006 | 13 000 |
+| Antall entiteter (`?s a []`) | 62 555 | 49 535 |
+| Antall distinkte subjekt-/objektnoder | 98 502 / 148 060 | 85 474 / 135 053 |
+| `?x a rdf:Property` | ~13 000 treff | 0 treff |
+| `?x a rdfs:Class` | alle klasser | 0 treff |
+| `?p rdfs:subPropertyOf ?p` | ~13 000 treff | 0 treff |
+
+En spørring som **eksplisitt leter etter** `rdf:Property`, `rdfs:Class`,
+`rdfs:subPropertyOf`, `rdfs:subClassOf` e.l. — eller som forventer et bestemt
+tripp-/typetall — vil altså gi et annet (lavere) svar. Alt annet er uendret.
+
+Mulige **fordeler** ved å la den stå av: mer forutsigbare og «rene» resultater
+(bare det som faktisk er lagt inn), mindre indeks, raskere og jevnere ytelse,
+ingen ekstra minnebruk ved oppstart (relevant siden testmiljøet har kaldstart).
+
+## Hva skal til for å gjenskape det i Fuseki
+
+To veier:
+
+**A. Live regelmotor i Fuseki (Jena assembler-oppsett).**
+Datasettet pakkes i en inferensmodell med en RDFS-reasoner
+(`ja:RDFSReasoner`, ev. OWL-micro/mini for mer). Reglene evalueres ved oppstart
+og holdes i minnet.
+*Kostnad:* økt minnebruk og lengre kaldstart (regelmotoren må bygge slutninger
+over ~1,2 mill. tripler hver gang containeren starter), noe lavere og mindre
+forutsigbar ytelse på tunge spørringer. Jena sin «RDFS simple»-modus er
+lettvekts, men reproduserer **ikke** «hvert predikat er `rdf:Property`» eller
+refleksiv `subPropertyOf` — da trengs den fulle regelmotoren.
+
+**B. Materialisere slutningene ved innlasting.**
+Kjøre regelsettet én gang når data lastes, og lagre de avledede triplene som
+vanlige tripler.
+*Kostnad:* datasettet vokser (~+2 %), og materialiseringen må kjøres på nytt ved
+hver nattlig oppdatering. For å få **nøyaktig** samme resultat som i dag må Jena
+sitt regelsett tilpasses GraphDB sitt (Ontotext bruker sitt eget «RDFS-Plus»-
+aktige sett; eksakt navn på oppsettet i produksjonsrepoet er ikke bekreftet).
+*Fordel:* ingen kjøretidskostnad; oppfører seg som en helt vanlig graf.
+
+## Hva gevinsten faktisk blir
+
+**Slik modellen ser ut i dag:** i praksis bare **tall-paritet** på
+introspeksjons-/statistikkspørringene, og at spørringer som leter etter
+`rdf:Property` / `rdfs:Class` / refleksiv `subPropertyOf` fortsatt gir treff.
+Ingen ny uttrekksevne for faktisk Grep-innhold.
+
+**Hvis Grep-modellen senere får reelle semantiske relasjoner** — f.eks.
+`rdfs:subClassOf` mellom typer, `rdfs:domain`/`range` på egenskaper,
+`owl:inverseOf` eller `owl:TransitiveProperty` — da ville en regelmotor gi
+konkret nytte: spørre på en overtype og få instanser av undertyper, spørre én
+retning av en inversrelasjon og få den andre, få transitiv lukning gratis. Dette
+er en **potensiell framtidig** gevinst, ikke en nåværende.
+
+## Spørsmål vi ber om svar på
+
+1. **Bruker dere i dag noen spørring som er avhengig av de avledede triplene?**
+   Konkret: spørringer mot `?x a rdf:Property`, `?x a rdfs:Class`,
+   `rdfs:subPropertyOf`, `rdfs:subClassOf`, eller telle-/listespørringer der dere
+   forventer «med inferens»-tallene i tabellen over.
+2. **Har dere faste forventninger til statistikk-tallene** (antall tripler,
+   typer, predikater) — f.eks. i tester, overvåkning eller dokumentasjon som
+   sammenligner mot en bestemt verdi?
+3. **Ønsker dere at Udir gjenskaper RDFS-resonneringen i Fuseki?**
+   (a) Nei — behold den enkleste, «rene» varianten uten regelmotor.
+   (b) Ja — slå på RDFS-resonnering for paritet med dagens oppførsel.
+   (c) Delvis — materialiser et definert utvalg (spesifiser gjerne hva).
+4. **Ser dere et framtidig behov** (planlagt ontologiarbeid, hierarkimodellering,
+   inverse/transitive egenskaper) som ville gjøre resonnering verdifull?
+
+## Vår anbefaling hvis ingen melder behov
+
+Beholde Fuseki uten regelmotor (alternativ 3a). Da oppdaterer vi de forventede
+verdiene i wiki-samlingen til de asserterte tallene, og merker de aktuelle
+spørringene med at «antall gjelder faktisk innlagt data, uten RDFS-slutninger».
+Innholdsspørringer er upåvirket. Vi kan når som helst gå til alternativ B senere
+hvis et reelt behov dukker opp.

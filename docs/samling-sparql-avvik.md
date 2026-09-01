@@ -9,8 +9,8 @@
 > **xb10g46s** og **xb11g04K** gir nå HTTP 200 fra Fuseki, og xb11g04K gir
 > **332 rader helt likt** GraphDB. Årsak ③ er dermed lukket. Gjenstår:
 > **xb10g54U** (fortsatt HTTP 400 — det er *ikke* et prefiks-problem, se ②) og
-> ①-spørringene (konfigurasjon: ontologien i Fuseki-datasettet). xb10g46s er nå
-> en ren dublett av xb10g44T og deler samme ①-avvik.
+> ①-spørringene (GraphDB kjører med RDFS-inferens på, Fuseki uten — den
+> asserterte dataen er identisk). xb10g46s er nå en ren dublett av xb10g44T.
 
 De 14 spørringene med avvik faller i **fire årsaker**. Tre av dem er (var)
 spørrings­feil som GraphDB tolererer stille og Jena avviser (eller svarer
@@ -18,16 +18,16 @@ annerledes på) — ikke feil i Fuseki. Den fjerde er kosmetisk.
 
 | Ref | Spørring | Årsak | Fuseki-svar | Status |
 | --- | --- | --- | --- | --- |
-| xb10g44T | List RDF-typer (m/ prefiks) | ① ontologi mangler i Fuseki | 44 rader (GraphDB 51) | Fuseki gir det «rene» svaret; se fix |
-| xb10g46s | – samme (nå m/ `PREFIX rdf:`) | ③→① prefiks lagt til; nå ontologi-diff | 44 rader (GraphDB 51) | HTTP 400 løst; identisk med xb10g44T |
-| xb10g46D | – samme, med `a` | ① ontologi mangler i Fuseki | 44 rader (GraphDB 51) | som xb10g44T |
-| xb10g47z | List alle properties | ① ontologi mangler i Fuseki | 155 (GraphDB 161) | 6 skjema-predikater faller bort |
-| xb10g48C | Antall tripler | ① ontologi mangler i Fuseki | 1 209 749 (GraphDB 1 235 817) | Δ = 26 068 ≈ ontologien |
-| xb10g48Q | Antall entiteter | ① ontologi mangler i Fuseki | 49 535 (GraphDB 62 555) | +13 020 ontologi-individer i GraphDB |
-| xb10g49& | Antall RDF-typer | ① ontologi mangler i Fuseki | 44 (GraphDB 51) | +7 meta-klasser i GraphDB |
-| xb10g49w | Distinkte predikater | ① ontologi mangler i Fuseki | 13 000 (GraphDB 13 006) | +6 skjema-predikater |
-| xb10g49G | Distinkte subjektnoder | ① ontologi mangler i Fuseki | 85 474 (GraphDB 98 502) | +13 028 ontologi-URI-er |
-| xb10g50b | Distinkte objektnoder | ① ontologi mangler i Fuseki | 135 053 (GraphDB 148 060) | +13 007 ontologi-URI-er |
+| xb10g44T | List RDF-typer (m/ prefiks) | ① GraphDB-inferens | 44 rader (GraphDB 51) | Fuseki gir den rene asserterte dataen |
+| xb10g46s | – samme (nå m/ `PREFIX rdf:`) | ③→① prefiks lagt til; nå inferens-diff | 44 rader (GraphDB 51) | HTTP 400 løst; identisk med xb10g44T |
+| xb10g46D | – samme, med `a` | ① GraphDB-inferens | 44 rader (GraphDB 51) | som xb10g44T |
+| xb10g47z | List alle properties | ① GraphDB-inferens | 155 (GraphDB 161) | +6 skjema-predikater fra regelsettet |
+| xb10g48C | Antall tripler | ① GraphDB-inferens | 1 209 749 (GraphDB 1 235 817) | Δ = 26 068 utledede tripler; assertert data er lik |
+| xb10g48Q | Antall entiteter | ① GraphDB-inferens | 49 535 (GraphDB 62 555) | +13 020 fra `?p a rdf:Property` |
+| xb10g49& | Antall RDF-typer | ① GraphDB-inferens | 44 (GraphDB 51) | +7 RDFS/OWL-vokabular-klasser |
+| xb10g49w | Distinkte predikater | ① GraphDB-inferens | 13 000 (GraphDB 13 006) | +6 skjema-predikater fra regelsettet |
+| xb10g49G | Distinkte subjektnoder | ① GraphDB-inferens | 85 474 (GraphDB 98 502) | +13 028 predikat-URI-er som `rdf:Property` |
+| xb10g50b | Distinkte objektnoder | ① GraphDB-inferens | 135 053 (GraphDB 148 060) | +13 007 predikat-URI-er / meta-klasser |
 | xb10g53Y | Likelydende kompetansemål (LK20) | ④ `GROUP_CONCAT`-rekkefølge | 2894 rader, **like** verdier | Ingen reell forskjell |
 | xb10g54n | Likelydende LK06 vs. LK20 | ④ `GROUP_CONCAT`-rekkefølge | 109 rader, **like** verdier | Ingen reell forskjell |
 | xb10g54U | Kompetansemål (LK20), tving `@sme`→`@nob` | ② `?spraak` bundet to ganger | **HTTP 400**, ingen JSON | Utestående — døp om BIND-variabelen |
@@ -40,76 +40,104 @@ xb10g47z, xb10g48C, xb10g48Q, xb10g49&, xb10g49w, xb10g49G, xb10g50b.
 
 ---
 
-## ① Grep-ontologien (TBox) ligger i GraphDB-repoet, men ikke i Fuseki-datasettet
+## ① GraphDB kjører med RDFS-resonnering på; Fuseki uten reasoner
+
+> **Rettet 2026-09-01:** en tidligere versjon av dette dokumentet forklarte
+> avviket med at «Grep-ontologien er lastet i GraphDB, ikke i Fuseki». Det er
+> **feil**. Den *asserterte* dataen er identisk på begge (se bevis under). Hele
+> differansen er tripler som GraphDB sin **regelmotor utleder**, og som Fuseki
+> ikke har fordi den kjører uten reasoner.
 
 Dette forklarer **ni distinkte spørringer** (xb10g46s teller som en tiende, men er
 etter prefiks-fiksen identisk med xb10g44T). Alle er «utforskende»/statistikk­
 spørringer som teller eller lister *alt* i grafen uten å avgrense til Grep-innhold.
 
-### Bevis
+### Bevis: den asserterte dataen er lik
 
-| Kontrollspørring | GraphDB | Fuseki |
-| --- | --- | --- |
-| `?s ?p ?o . FILTER(STRSTARTS(STR(?s), "http://psi.udir.no/ontologi/kl06/"))` — antall | **25 998** | **0** |
-| `?s rdfs:subPropertyOf ?o` — antall | 13 009 | 0 |
-| `?s rdfs:subClassOf ?o` — antall | 9 | 0 |
-| `?s rdfs:domain ?o` — antall | 6 | 0 |
-| Totalt antall tripler | 1 235 817 | 1 209 749 |
+GraphDB kan spørres på kun eksplisitte (asserterte) tripler via
+`FROM <http://www.ontotext.com/explicit>`. Da får man **nøyaktig Fuseki-tallene**:
 
-Differansen i totalt antall tripler (26 068) er så godt som nøyaktig antallet
-tripler med subjekt i ontologi-navnerommet (25 998); resten (~70) er GraphDB
-sitt innebygde PROTON-systemskjema (`http://proton.semanticweb.org/…`, 5 tripler)
-og noen få aksiom-tripler.
+| Måltall | GraphDB (m/ inferens) | GraphDB **kun eksplisitt** | Fuseki |
+| --- | --- | --- | --- |
+| Antall tripler | 1 235 817 | **1 209 749** | **1 209 749** |
+| Distinkte RDF-typer (`[] a ?o`) | 51 | **44** | **44** |
+| Distinkte predikater | 13 006 | **13 000** | **13 000** |
+| Entiteter (`?s a []`) | 62 555 | **49 535** | **49 535** |
+| `?s a rdf:Property` | 13 013 | **0** | **0** |
 
-Ontologien definerer hver av de ~13 000 egenskapene med minst
-`a rdf:Property` (evt. `owl:TransitiveProperty` / `owl:SymmetricProperty`) og
-`rdfs:subPropertyOf …`, og klassene med `a rdfs:Class`. Det er dette som blåser
-opp tellingene:
+Fuseki mangler altså **ingen data**. Alle 26 068 ekstra triplene i GraphDB er
+regelmotor-output.
 
-- **De 7 ekstra RDF-typene** i GraphDB (xb10g44T / xb10g46D / xb10g49&):
-  `rdf:Property`, `rdf:List`, `rdfs:Class`, `rdfs:Datatype`,
-  `rdfs:ContainerMembershipProperty`, `owl:TransitiveProperty`,
-  `owl:SymmetricProperty`. De 44 Fuseki returnerer er de faktiske grep-typene
-  (jf. «44 grep-typer» i wiki-teksten).
-- **De 6 ekstra predikatene** i GraphDB (xb10g47z / xb10g49w):
-  `rdfs:subClassOf`, `rdfs:subPropertyOf`, `rdfs:domain`, `rdfs:range`,
-  `owl:inverseOf`, `proton:transitiveOver`.
-- **+~13 000 entiteter/subjekt-/objektnoder**: ontologiens egenskaps- og
-  klasse-URI-er, som hver får `a …` og opptrer som subjekt og objekt.
+### Hva regelmotoren lager
 
-Det er **ingen inferens-effekt** her: `rdfs:Resource`-typing, superklasse­
-ekspansjon på instanser og `owl:sameAs` gir 0 treff på begge motorer, og
-`d:NOR01-06 a ?t` gir nøyaktig samme ene type (`u:laereplan_lk20`) på begge.
-Forskjellen er utelukkende at **skjemaet er lastet inn ett sted og ikke det
-andre**. Det ligger heller ikke noe i navngitte grafer — alt er i default-grafen
-på begge.
+GraphDB-repoet kjører med et RDFS/OWL-Horst-aktig regelsett (Ontotext sitt
+standardoppsett). Grep-dataene har **ingen asserterte klasse- eller
+egenskaps­hierarkier** (0 `rdfs:domain`, 0 `rdfs:range`, 0 reell
+`rdfs:subClassOf`/`rdfs:subPropertyOf` mellom Grep-termer — verifisert), så
+regelmotoren har ikke noe *innholdsmessig* å utlede. Det den produserer er ren
+skjema-boilerplate:
+
+- `?p a rdf:Property` for hvert predikat (~13 013 tripler) → blåser opp
+  entitets-, subjekt- og objektnode-tellingene med ~13 000.
+- `?p rdfs:subPropertyOf ?p` (refleksivt) for hvert predikat (~13 006).
+- `?c a rdfs:Class` for hver klasse.
+- RDFS/OWL-vokabularets egne aksiomer: `rdf:Alt rdfs:subClassOf rdfs:Container`,
+  `rdf:XMLLiteral rdfs:subClassOf rdfs:Literal`, `rdf:type a rdf:Property`, osv.
+  Det er disse som gir **de 7 ekstra «RDF-typene»** (`rdf:Property`, `rdf:List`,
+  `rdfs:Class`, `rdfs:Datatype`, `rdfs:ContainerMembershipProperty`,
+  `owl:TransitiveProperty`, `owl:SymmetricProperty`) og **de 6 ekstra
+  predikatene** (`rdfs:subClassOf`, `rdfs:subPropertyOf`, `rdfs:domain`,
+  `rdfs:range`, `owl:inverseOf`, `proton:transitiveOver` — de to siste fra
+  GraphDB sitt innebygde PROTON-skjema, ~5 tripler).
+
+**Ingen instans-nivå-inferens er i spill:** `d:NOR01-06 a ?t` gir nøyaktig samme
+ene type (`u:laereplan_lk20`) på begge, `rdfs:Resource`-typing og `owl:sameAs`
+gir 0 på begge, og det finnes ingen navngitte grafer.
+
+### Er dette en svakhet ved Fuseki?
+
+**Nei, ikke i praksis.**
+
+- Resonnering er ikke «innebygd» i GraphDB heller — det er et *konfigurert*
+  regelsett som Ontotext slår på som standard. Jena kan også gjøre RDFS-inferens
+  (assembler-oppsett med `ja:RDFSReasoner` / `InfModel`); Fuseki har det bare av
+  som standard.
+- For Grep-data utleder RDFS-resonnering **ingenting brukbart** — det er ingen
+  hierarkier å resonnere over. Den eneste effekten er «hvert predikat er en
+  `rdf:Property`»-boilerplate som *bare* påvirker introspeksjons-tellinger.
+- **Ingen innholdsspørring** — verken i wiki-samlingen eller i vanlig bruk —
+  er avhengig av de utledede triplene. Instans-spørringer treffer identisk
+  assertert data.
+- Det slår først ut hvis en konsument eksplisitt spør `?x a rdf:Property`,
+  `?x a rdfs:Class` eller refleksiv `rdfs:subPropertyOf` — skjema-introspeksjon,
+  ikke datauttrekk. Ingen av spørringene i samlingen gjør det.
+
+Grunnen til at man **ikke ser dette i vanlig SPARQL-praksis**: reelle spørringer
+binder mot konkrete predikater (`u:tilhoerer-laereplan`) og klasseverdier
+(`u:kompetansemaal_lk20`) — ABox-en — som er 100 % lik på begge motorer. De
+utledede triplene dukker bare opp ved åpne skann (`?s ?p ?o`, `[] a ?type`,
+`COUNT(*)`).
 
 ### Hva bør gjøres
 
-**Anbefalt:** last Grep-ontologien inn i Fuseki-datasettet også, slik at
-endepunktene er innholdsmessig like. Da forsvinner alle ①-avvikene av seg selv,
-og spørringene i wikien trenger ingen endring.
+1. **Enkleste vei:** behandle Fuseki-tallene som de *korrekte* tallene for den
+   asserterte Grep-dataen, og oppdater forventede verdier i wikien
+   (44 typer, 13 000 predikater, 1 209 749 tripler, osv.). GraphDB sitt
+   `FROM <http://www.ontotext.com/explicit>` gir de samme tallene og er nyttig
+   for A/B-sjekk.
+2. **Hvis full paritet ønskes:** slå på RDFS-resonnering i Fuseki (Jena
+   assembler). Merk at det gjeninnfører nøyaktig den boilerplaten som blåste opp
+   GraphDB-tallene — sjelden verdt det her.
+3. **For type-/property-listene** (xb10g44T / xb10g46D / xb10g47z): «Grep-måten»
+   xb10g47m — `[] u:grep-type ?type` — er allerede robust (44 på begge). Ev.
+   avgrens eksplisitt:
 
-Hvis ontologien **bevisst** skal holdes utenfor Fuseki, så er Fuseki-tallene de
-«riktige» tallene for Grep-*innholdet*, og da bør de forventede verdiene i wikien
-oppdateres. For spørringene som skal liste typer/properties kan man i tillegg
-avgrense eksplisitt:
-
-```sparql
-# xb10g44T / xb10g46D — bare grep-typer, likt svar (44) på begge motorer
-PREFIX u: <http://psi.udir.no/ontologi/kl06/>
-SELECT DISTINCT ?type
-WHERE { [] a ?type
-        FILTER(STRSTARTS(STR(?type), "http://psi.udir.no/ontologi/kl06/")) }
-```
-
-(Alternativt er «Grep-måten» xb10g47m — `[] u:grep-type ?type` — allerede
-robust: 44 på begge.)
-
-For statistikk-spørringene xb10g48C/48Q/49&/49w/49G/50b: hvis de skal telle
-Grep-innhold uavhengig av om skjemaet er lastet, legg på
-`FILTER(!STRSTARTS(STR(?s), "http://psi.udir.no/ontologi/kl06/"))` (og tilsvarende
-for `?o` der det er en nodetelling). Da gir GraphDB samme tall som Fuseki.
+   ```sparql
+   PREFIX u: <http://psi.udir.no/ontologi/kl06/>
+   SELECT DISTINCT ?type
+   WHERE { [] a ?type
+           FILTER(STRSTARTS(STR(?type), "http://psi.udir.no/ontologi/kl06/")) }
+   ```
 
 ---
 
@@ -198,7 +226,7 @@ Første `UNION`-gren brukte `rdf:type` med bare `u:` og `d:` deklarert. Med
 
 Med `PREFIX rdf:` lagt til er spørringen funksjonelt en **dublett av xb10g44T**
 og gir samme svar som den: 44 rader mot Fuseki, 51 mot GraphDB — differansen er
-nå utelukkende ontologien (se ①), ikke prefikset.
+nå utelukkende GraphDB-inferensen (se ①), ikke prefikset.
 
 > Hvis poenget i wikien er å *vise* GraphDB sin innebygde prefiks-snarvei, bør
 > det stå eksplisitt at det er en ikke-standard GraphDB-utvidelse som ikke virker
@@ -267,11 +295,13 @@ spørringen fra fil.
 
 | Årsak | Spørringer | Er det en Fuseki-feil? | Tiltak | Status 2026-09-01 |
 | --- | --- | --- | --- | --- |
-| ① Ontologien mangler i Fuseki-datasettet | xb10g44T, xb10g46s, xb10g46D, xb10g47z, xb10g48C, xb10g48Q, xb10g49&, xb10g49w, xb10g49G, xb10g50b | Nei — konfigurasjon | Last ontologien inn i Fuseki (anbefalt), ev. oppdater forventede tall + avgrens spørringene | Utestående |
+| ① GraphDB kjører med RDFS-inferens, Fuseki uten | xb10g44T, xb10g46s, xb10g46D, xb10g47z, xb10g48C, xb10g48Q, xb10g49&, xb10g49w, xb10g49G, xb10g50b | Nei — konfigurasjon; assertert data er identisk (begge 1 209 749) | Oppdater forventede tall i wikien til de asserterte (anbefalt), ev. slå på RDFS-reasoner i Fuseki | Utestående (kosmetisk) |
 | ② `?spraak` bundet to ganger | xb10g54U | Nei — spørringsfeil GraphDB slapp forbi | Døp om BIND-variabel | **Utestående** (HTTP 400) |
 | ③ Udeklarert `rdf:`-prefiks | xb10g46s, xb11g04K | Nei — spørringsfeil GraphDB slapp forbi | Legg til `PREFIX rdf:` / bruk `a` | ✅ Rettet i wiki; xb11g04K nå identisk, xb10g46s går over i ① |
 | ④ `GROUP_CONCAT`-rekkefølge | xb10g53Y, xb10g54n | Nei — udefinert i SPARQL 1.1 | Ingen (ev. indre `ORDER BY`) | Ingen reell forskjell |
 
-**Neste steg:** (1) rett `?spraak`-kollisjonen i xb10g54U, (2) avklar om
-Grep-ontologien skal lastes inn i Fuseki-datasettet — det lukker de ti
-①-spørringene uten videre endringer i wikien.
+**Neste steg:** (1) rett `?spraak`-kollisjonen i xb10g54U, (2) bestem hvordan
+①-avviket skal håndteres — enten oppdatere de forventede tallene i wikien til den
+asserterte dataen (Fuseki-tallene), eller slå på RDFS-resonnering i Fuseki for
+full paritet. Ingen av delene haster: assertert data er allerede identisk, og
+ingen innholdsspørring påvirkes.
